@@ -1,0 +1,131 @@
+# ##############################################################################
+# EB Deploy Bundle Excludes
+# ##############################################################################
+# When .ebignore exists, EB CLI uses these rules INSTEAD of .gitignore
+# to decide what goes into the deploy bundle. Anything not matched here
+# (including untracked files) WILL be uploaded to EB. Keep this thorough.
+#
+# Files that MUST stay in the bundle:
+#   src/, dist/, public/ (sans uploads), client/, .platform/, package*.json,
+#   Procfile, nest-cli.json, tsconfig*.json
+# ##############################################################################
+
+# --- Dependencies ---
+node_modules/
+
+# --- Logs (any) ---
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Environment files ---
+# (.env IS bundled — production reads it; EB env vars override it)
+.env.local
+.env.development
+.env.test
+.env.test.local
+.env.example
+
+# --- Working / temp dirs ---
+tmp/
+$tmp/
+temp_check/
+
+# --- Local debug / one-off scripts at backend root (NOT for production) ---
+add_city_column.js
+verify_city_column.js
+check_db.js
+check59.js
+check-59.ts
+check-59-raw.ts
+check_mrp_db.js
+check_mrp_mysql.js
+check_order_schema.js
+check_recent_orders.js
+check_stock_temp.js
+check_struct.js
+cleanup_dummy_data.js
+cleanup_dummy_data_v2.js
+cleanup_orders.js
+create_test_data.js
+create-db.js
+db_check.js
+debug_json_fixes.js
+dump_orders.js
+final_db_purge.js
+fix_db.js
+full_db_dump.js
+full_db_report.json
+purge_ledgers.js
+reset_order.js
+seed_admin.js
+seed_test.js
+seed_today.js
+server_test.js
+stress-test.js
+test_fetch.js
+test_flow.js
+test_flow_bulk.js
+test_tally_conn.js
+verify-orders.js
+
+# --- Local-only PM2 / process configs ---
+ecosystem.config.js
+
+# --- Schema dumps / data exports ---
+stock_item_schema.txt
+stock_item_schema_utf8.txt
+*_dump.json
+*_report.json
+*_results.txt
+bulk_results*.txt
+final_result.txt
+test_output.txt
+test_log.txt
+route_analysis.txt
+build_errors.txt
+out.txt
+
+# --- Local frontend uploads (now on S3) ---
+public/uploads/
+
+# --- Tests / dev tooling ---
+test/
+*.spec.ts
+*.test.ts
+coverage/
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# --- Deploy zips / archives ---
+*.zip
+*.tar
+*.tar.gz
+
+# --- Docker (EB uses native Node platform here, not Docker) ---
+Dockerfile
+docker-compose*.yml
+
+# --- Git / CI / linting / planning artifacts ---
+.git/
+.github/
+.gitignore
+.eslintrc*
+eslint.config.*
+.prettierrc*
+.planning/
+.claude/
+
+# --- EB CLI local state (never bundle into itself) ---
+.elasticbeanstalk/
+
+# --- Ngrok dev tunnel logs ---
+ngrok_log.txt

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/ppw-logo.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="apple-touch-icon" href="/ppw-logo.png" />
+    <title>P P W</title>
+    <style>
+      body {
+        margin: 0;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        background-color: #f8fafc;
+        /* Matches slate-50 */
+      }
+
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: #f8fafc;
+        transition: opacity 0.5s ease-out;
+      }
+
+      .loader-content {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .loader-circle {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #4f46e5, #ec4899);
+        /* Indigo to Pink */
+        animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      }
+
+      .loader-icon {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        background-color: white;
+        border-radius: 12px;
+        box-shadow:
+          0 4px 6px -1px rgba(0, 0, 0, 0.1),
+          0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        animation: float 3s ease-in-out infinite;
+      }
+
+      .loader-text {
+        margin-top: 24px;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        color: #64748b;
+        /* Slate-500 */
+        text-transform: uppercase;
+        animation: fade-pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse-ring {
+        0% {
+          transform: scale(0.8);
+          opacity: 0.5;
+          box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+        }
+
+        70% {
+          transform: scale(1.1);
+          opacity: 0;
+          box-shadow: 0 0 0 20px rgba(79, 70, 229, 0);
+        }
+
+        100% {
+          transform: scale(0.8);
+          opacity: 0;
+          box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+        }
+      }
+
+      @keyframes float {
+        0%,
+        100% {
+          transform: translateY(0) rotate(0deg);
+        }
+
+        50% {
+          transform: translateY(-5px) rotate(5deg);
+        }
+      }
+
+      @keyframes fade-pulse {
+        0%,
+        100% {
+          opacity: 0.6;
+        }
+
+        50% {
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root">
+      <div id="app-loader">
+      <div class="loader-content">
+        <div class="loader-circle"></div>
+        <img src="/ppw-logo.png" class="loader-icon" alt="Logo" style="padding: 5px;" />
+      </div>
+      <div class="loader-text">PPW</div>
+    </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

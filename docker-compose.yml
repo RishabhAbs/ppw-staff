@@ -1,0 +1,70 @@
+services:
+  # 1. Database
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: tally_sync
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3310:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+  # 2. Backend API
+  backend:
+    build: ./backend
+    restart: always
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: user
+      DB_PASSWORD: password
+      DB_NAME: tally_sync
+      PORT: 3000
+      TALLY_URL: http://localhost:9000
+      TALLY_COMPANY: "6 PPW [25-26]"
+    depends_on:
+      - mysql
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/public:/app/public
+
+  # 3. Frontend (Nginx)
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+
+  # 4. PhpMyAdmin
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    restart: always
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+
+  # 5. Ngrok Tunnel
+  ngrok:
+    image: ngrok/ngrok:latest
+    restart: unless-stopped
+    command:
+      - "http"
+      - "frontend:80"
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - 4040:4040
+
+volumes:
+  db_data:
+  uploads_data:
