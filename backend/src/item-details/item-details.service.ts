@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { Readable } from 'stream';
 import { ItemDetail } from '../entities/item-detail.entity';
 import { ItemMedia } from '../entities/item-media.entity';
@@ -124,6 +124,7 @@ export class ItemDetailsService {
     s3Key: string,
     res: Response,
     contentType: string,
+    req?: Request,
   ): Promise<void> {
     if (this.bucket) {
       try {
@@ -131,11 +132,17 @@ export class ItemDetailsService {
           new GetObjectCommand({ Bucket: this.bucket, Key: s3Key }),
         );
         res.setHeader('Content-Type', obj.ContentType || contentType);
-        res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+        // Filenames are reused across re-uploads, so the URL alone can't be
+        // trusted as immutable. Require the browser to revalidate via ETag so a
+        // replaced image is fetched fresh instead of served stale from cache.
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
         if (obj.ContentLength) {
           res.setHeader('Content-Length', String(obj.ContentLength));
         }
         if (obj.ETag) res.setHeader('ETag', obj.ETag);
+        if (obj.LastModified) {
+          res.setHeader('Last-Modified', obj.LastModified.toUTCString());
+        }
         if (obj.Body instanceof Readable) {
           obj.Body.pipe(res);
           return;
@@ -150,9 +157,21 @@ export class ItemDetailsService {
 
     const localPath = path.join(this.localMediaRoot, s3Key);
     if (fs.existsSync(localPath) && fs.statSync(localPath).isFile()) {
+      const stat = fs.statSync(localPath);
+      // Reused filenames → must revalidate. The ETag is derived from the file's
+      // size + mtime, so re-uploading a new image (different bytes/time) yields
+      // a new ETag and the browser fetches the fresh image instead of a stale
+      // cached copy. Honour conditional requests with a 304 when unchanged.
+      const etag = `"${stat.size}-${stat.mtimeMs}"`;
       res.setHeader('Content-Type', contentType);
-      res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
-      res.setHeader('Content-Length', String(fs.statSync(localPath).size));
+      res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+      res.setHeader('ETag', etag);
+      res.setHeader('Last-Modified', stat.mtime.toUTCString());
+      if (req?.headers['if-none-match'] === etag) {
+        res.status(304).end();
+        return;
+      }
+      res.setHeader('Content-Length', String(stat.size));
       fs.createReadStream(localPath).pipe(res);
       return;
     }

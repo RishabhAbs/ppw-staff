@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { getStockItems, getItemDetails, saveItemDetails, getUser } from '../api';
-import { ArrowLeft, Save, Undo2, Loader, Search, ImagePlus, Trash2, Pencil, Camera, Video, Crop, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Save, Undo2, Loader, Search, ImagePlus, Trash2, Pencil, Camera, Video, Crop, RefreshCw, Eye, X } from 'lucide-react';
 import BarcodeScanner from './BarcodeScanner';
 import MediaPicker from './MediaPicker';
 import ImageEditor from './ImageEditor';
+import ZoomableImage from './ZoomableImage';
 
 interface StockItem {
     masterid: string;
@@ -75,6 +76,8 @@ export default function ItemDetailsPage({ onClose }: Props) {
     // Per-slot "Edit" menu (Replace / Edit) and the in-place crop editor.
     const [editMenuIndex, setEditMenuIndex] = useState<number | null>(null);
     const [editImageIndex, setEditImageIndex] = useState<number | null>(null);
+    const [viewImageUrl, setViewImageUrl] = useState<string | null>(null);
+    const [viewVideoUrl, setViewVideoUrl] = useState<string | null>(null);
     const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const videoInputRefs = useRef<(HTMLInputElement | null)[]>([null, null]);
@@ -510,7 +513,11 @@ export default function ItemDetailsPage({ onClose }: Props) {
                                             </div>
                                             {slot.previewUrl ? (
                                                 <>
-                                                    <img src={slot.previewUrl} alt={`Image ${slot.slot}`} draggable={false} className="w-full h-full object-cover pointer-events-none" />
+                                                    <img src={slot.previewUrl} alt={`Image ${slot.slot}`} draggable={false} className="w-full h-full object-contain pointer-events-none" />
+                                                    {/* View (open fullscreen zoomable viewer) */}
+                                                    <button onClick={(e) => { e.stopPropagation(); setViewImageUrl(slot.previewUrl!); }} className="absolute top-1 right-[3.25rem] z-20 w-5 h-5 bg-indigo-600/80 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 active:scale-90 transition-all shadow-md" title="View">
+                                                        <Eye size={10} />
+                                                    </button>
                                                     {/* Delete */}
                                                     <button onClick={(e) => { e.stopPropagation(); handleRemoveImage(index); }} className="absolute top-1 right-1 z-20 w-5 h-5 bg-red-500/90 text-white rounded-full flex items-center justify-center hover:bg-red-600 active:scale-90 transition-all shadow-md" title="Delete">
                                                         <Trash2 size={10} />
@@ -521,7 +528,10 @@ export default function ItemDetailsPage({ onClose }: Props) {
                                                     </button>
                                                     {editMenuIndex === index && (
                                                         <div className="absolute top-7 right-1 z-30 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden w-28" onClick={(e) => e.stopPropagation()}>
-                                                            <button onClick={() => { setEditMenuIndex(null); setActivePicker({ type: 'image', index }); }} className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+                                                            <button onClick={() => { setEditMenuIndex(null); setViewImageUrl(slot.previewUrl!); }} className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+                                                                <Eye size={12} className="text-indigo-500" /> View
+                                                            </button>
+                                                            <button onClick={() => { setEditMenuIndex(null); setActivePicker({ type: 'image', index }); }} className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors border-t border-slate-50">
                                                                 <RefreshCw size={12} className="text-indigo-500" /> Replace
                                                             </button>
                                                             <button onClick={() => { setEditMenuIndex(null); setEditImageIndex(index); }} className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors border-t border-slate-50">
@@ -577,6 +587,14 @@ export default function ItemDetailsPage({ onClose }: Props) {
                                                         onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play()}
                                                         onMouseLeave={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
                                                     />
+                                                    {/* View (open fullscreen video player) */}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setViewVideoUrl(slot.previewUrl!); }}
+                                                        className="absolute top-1 right-7 w-5 h-5 bg-indigo-600/80 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 active:scale-90 transition-all shadow-md z-10"
+                                                        title="View"
+                                                    >
+                                                        <Eye size={10} />
+                                                    </button>
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleRemoveVideo(index); }}
                                                         className="absolute top-1 right-1 w-5 h-5 bg-red-500/90 text-white rounded-full flex items-center justify-center hover:bg-red-600 active:scale-90 transition-all shadow-md z-10"
@@ -653,6 +671,49 @@ export default function ItemDetailsPage({ onClose }: Props) {
                     onConfirm={(file) => { handleEditedImage(editImageIndex, file); setEditImageIndex(null); }}
                     onClose={() => setEditImageIndex(null)}
                 />
+            )}
+
+            {/* Fullscreen image viewer — pinch / scroll / double-tap to zoom in and
+                inspect the uploaded photo's clarity. */}
+            {viewImageUrl && (
+                <div className="fixed inset-0 z-[1003] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={() => setViewImageUrl(null)}>
+                    <button
+                        onClick={() => setViewImageUrl(null)}
+                        className="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center bg-white/15 text-white rounded-full hover:bg-white/25 active:scale-90 transition-all"
+                        title="Close"
+                    >
+                        <X size={22} />
+                    </button>
+                    <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+                        <ZoomableImage
+                            src={viewImageUrl}
+                            alt="Image preview"
+                            className="w-full h-[75vh] rounded-2xl bg-black/40"
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Fullscreen video viewer — play the uploaded clip to review it. */}
+            {viewVideoUrl && (
+                <div className="fixed inset-0 z-[1003] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={() => setViewVideoUrl(null)}>
+                    <button
+                        onClick={() => setViewVideoUrl(null)}
+                        className="absolute top-4 right-4 z-10 w-10 h-10 flex items-center justify-center bg-white/15 text-white rounded-full hover:bg-white/25 active:scale-90 transition-all"
+                        title="Close"
+                    >
+                        <X size={22} />
+                    </button>
+                    <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+                        <video
+                            src={viewVideoUrl}
+                            className="w-full max-h-[80vh] rounded-2xl bg-black"
+                            controls
+                            autoPlay
+                            playsInline
+                        />
+                    </div>
+                </div>
             )}
         </div>
     );

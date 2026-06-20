@@ -16,6 +16,52 @@ const HANDLE = 14;   // hit area for resize handles
 type Handle = 'move' | 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 interface Rect { x: number; y: number; w: number; h: number; }
 
+// Tiled diagonal watermark repeated across the WHOLE image (like a "SAMPLE
+// TEXT" overlay). Two stacked lines per stamp — name on top, number below —
+// drawn translucent at an angle so the image still shows clearly through it.
+const WATERMARK_LINES = ['Purbanchal Papers & Works', '9864114007'];
+function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const fontSize = Math.max(11, Math.round(Math.min(w, h) * 0.03));
+    const lineHeight = Math.round(fontSize * 1.5); // clear gap between the 2 lines
+    const angle = -Math.PI / 6; // -30°, diagonal bottom-left -> top-right
+
+    ctx.save();
+    ctx.font = `400 ${fontSize}px Arial, sans-serif`; // normal weight (not bold)
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Semi-transparent BLACK text. A faint light halo keeps it readable over
+    // dark areas too, while the image still shows through.
+    ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.1));
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillStyle = 'rgba(0,0,0,0.42)';
+
+    // Rotate about the centre, then tile over the diagonal so the rotated
+    // pattern covers the whole image with no gaps. Tighter spacing = more
+    // repetitions across the image.
+    const diag = Math.ceil(Math.hypot(w, h));
+    const widest = Math.max(...WATERMARK_LINES.map((t) => ctx.measureText(t).width));
+    const stampH = lineHeight * WATERMARK_LINES.length;     // height of one 2-line stamp
+    const tileW = widest + fontSize * 2.5;                  // tighter horizontal spacing
+    const tileH = stampH + fontSize * 2;                    // tighter vertical spacing
+
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(angle);
+
+    let row = 0;
+    for (let y = -diag; y < diag; y += tileH, row++) {
+        const rowOffset = (row % 2) * (tileW / 2); // brick-offset alternate rows
+        for (let x = -diag; x < diag; x += tileW) {
+            const px = x + rowOffset;
+            WATERMARK_LINES.forEach((line, i) => {
+                const ly = y + (i - (WATERMARK_LINES.length - 1) / 2) * lineHeight;
+                ctx.strokeText(line, px, ly);
+                ctx.fillText(line, px, ly);
+            });
+        }
+    }
+    ctx.restore();
+}
+
 export default function ImageEditor({ source, onConfirm, onClose }: Props) {
     const [img, setImg] = useState<HTMLImageElement | null>(null);
     const [displayUrl, setDisplayUrl] = useState('');
@@ -206,6 +252,9 @@ export default function ImageEditor({ source, onConfirm, onClose }: Props) {
             octx.fillStyle = '#ffffff';
             octx.fillRect(0, 0, cropW, cropH);
             octx.drawImage(full, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+            // Stamp the two-line watermark onto the final cropped image.
+            drawWatermark(octx, cropW, cropH);
 
             const blob: Blob = await new Promise((resolve, reject) =>
                 out.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.9),

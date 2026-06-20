@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle, AlertCircle, LogOut, Package, FileText, ClipboardList, RefreshCw, ShoppingCart, IndianRupee, Calendar, ArrowRight, ScanLine } from 'lucide-react';
 import { getUser, getDashboardStats, syncLedgers, syncStockItems } from '../api';
+import { canAccess, getDefaultRoute } from '../utils';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -22,12 +23,19 @@ export default function Dashboard() {
     const [syncingLedgers, setSyncingLedgers] = useState(false);
     const [syncingStock, setSyncingStock] = useState(false);
 
-    // Redirect Employees to Orders
+    // Non-admins don't get the admin dashboard. Send them to a page they're
+    // actually permitted to see. Previously this hardcoded navigate('/orders'),
+    // but a user without the 'reports' permission can't access /orders — the
+    // AuthGuard bounced them back to '/', which re-ran this effect, producing
+    // an infinite Dashboard <-> /orders redirect loop (blank screen + Chrome
+    // navigation throttling). Route by permission instead.
     useEffect(() => {
         const user = getUser();
-        if (user.role !== 'admin') {
-            navigate('/orders');
-        }
+        if (user.role === 'admin') return;
+        // Prefer /orders if they can see it; otherwise their permission-based default.
+        const target = canAccess(user, '/orders') ? '/orders' : getDefaultRoute(user);
+        // Never navigate to '/' (this page) — that would loop straight back here.
+        if (target && target !== '/') navigate(target, { replace: true });
     }, []);
 
     useEffect(() => {

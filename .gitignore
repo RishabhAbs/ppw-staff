@@ -13,6 +13,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Runtime logs / startup scratch files
+*.log
+*.err
+backend/_startup.*
+backend/ppw-*.log
+
 # Environment / Secret Files
 .env
 .env.*

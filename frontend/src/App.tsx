@@ -29,11 +29,25 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 function AuthGuard({ children, path }: { children: React.ReactElement; path?: string }) {
-  const userStr = localStorage.getItem('user');
-  if (!userStr) return <Navigate to="/login" replace />;
-  const user = JSON.parse(userStr);
+  // Safe parse — a missing/corrupt 'user' key must send to /login, never throw.
+  let user: any = null;
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr && userStr !== 'undefined' && userStr !== 'null') {
+      user = JSON.parse(userStr);
+    }
+  } catch {
+    user = null;
+  }
+  if (!user || !user.username) return <Navigate to="/login" replace />;
+
   if (path && !canAccess(user, path)) {
-    return <Navigate to={getDefaultRoute(user)} replace />;
+    const target = getDefaultRoute(user);
+    // Loop guard: if the computed default is the very path we're already on
+    // (and being denied), redirecting there would bounce forever and blank
+    // the screen. Send to /login instead so the user can re-auth.
+    if (target === path) return <Navigate to="/login" replace />;
+    return <Navigate to={target} replace />;
   }
   return children;
 }

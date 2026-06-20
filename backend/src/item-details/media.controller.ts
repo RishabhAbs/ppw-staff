@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import { Controller, Get, Param, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { ItemDetailsService } from './item-details.service';
 
 const SAFE_NAME = /^[\w.\-]+$/;
@@ -28,6 +28,7 @@ export class MediaController {
   async streamImage(
     @Param('filename') filename: string,
     @Res() res: Response,
+    @Req() req: Request,
   ) {
     if (!SAFE_NAME.test(filename)) {
       res.status(400).send('Invalid filename');
@@ -46,6 +47,7 @@ export class MediaController {
       `uploads/items/${filename}`,
       res,
       contentType,
+      req,
     );
   }
 }

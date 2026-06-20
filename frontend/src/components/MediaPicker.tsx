@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Camera, Image, Check, RefreshCcw, Circle, Square } from 'lucide-react';
 import ImageEditor from './ImageEditor';
+import ZoomableImage from './ZoomableImage';
 
 const MAX_VIDEO_SEC = 15;
 
@@ -282,9 +283,14 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
 
                     {step === 'preview' && capturedImage && (
                         <div className="space-y-6">
-                            <div className="bg-slate-100 rounded-2xl overflow-hidden aspect-[3/4] shadow-inner">
-                                <img src={capturedImage} className="w-full h-full object-cover" alt="Capture preview" />
-                            </div>
+                            <ZoomableImage
+                                src={capturedImage}
+                                alt="Capture preview"
+                                className="bg-slate-100 rounded-2xl aspect-[3/4] shadow-inner"
+                            />
+                            <p className="text-center text-[11px] font-semibold text-slate-400 -mt-3">
+                                Pinch or double-tap to zoom in and check sharpness before using.
+                            </p>
 
                             <div className="flex gap-4">
                                 <button 
