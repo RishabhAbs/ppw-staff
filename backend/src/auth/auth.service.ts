@@ -20,6 +20,10 @@ export class AuthService {
       .where('LOWER(user.username) = LOWER(:username)', { username })
       .getOne();
     if (user) {
+      // Block deactivated accounts before any password check.
+      if (user.is_active === false) {
+        throw new UnauthorizedException('Account is deactivated');
+      }
       // 1. Try bcrypt compare (for migrated users)
       const isMatch = await bcrypt.compare(pass, user.password);
       if (isMatch) {

@@ -532,7 +532,7 @@ export default function CreateOrder() {
         let rate = parseFloat(itemRate);
         const discount = parseFloat(itemDiscount) || 0;
         const minRate = getMinRate();
-        if (minRate > 0 && rate <= minRate) {
+        if (minRate > 0 && rate < minRate) {
             showToast(`Rate is too low`, 'error');
             return;
         }
@@ -1019,7 +1019,7 @@ export default function CreateOrder() {
                                         </div>
                                     </div>
 
-                                    {itemRate && getMinRate() > 0 && parseFloat(itemRate) <= getMinRate() && (
+                                    {itemRate && getMinRate() > 0 && parseFloat(itemRate) < getMinRate() && (
                                         <div className="bg-red-50 border-2 border-red-100 rounded-xl px-4 py-3 text-[9px] font-bold text-red-600 uppercase flex items-center gap-2">
                                             <Info size={14} /> <span>Rate is too low</span>
                                         </div>

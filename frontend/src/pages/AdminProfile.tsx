@@ -17,6 +17,8 @@ import {
   ShieldCheck,
   Tag,
   Box,
+  UserCheck,
+  UserX,
 } from "lucide-react";
 
 export default function AdminProfile() {
@@ -142,6 +144,21 @@ export default function AdminProfile() {
     }
   };
 
+  const handleToggleActive = async (user: any) => {
+    const nextActive = user.is_active === false; // currently inactive -> activate
+    const action = nextActive ? "activate" : "deactivate";
+    if (!confirm(`Are you sure you want to ${action} ${user.name || user.username}?`))
+      return;
+    try {
+      await updateUser(user.id, { is_active: nextActive });
+      fetchUsers();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || "Operation failed";
+      alert(msg);
+      console.error(error);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 pb-24">
       <div className="flex items-center gap-3 mb-2">
@@ -172,15 +189,22 @@ export default function AdminProfile() {
           {users.map((user) => (
             <div
               key={user.id}
-              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between"
+              className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transition-opacity ${
+                user.is_active === false ? "opacity-60" : ""
+              }`}
             >
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-lg uppercase">
                   {user.username.charAt(0)}
                 </div>
                 <div>
-                  <p className="font-bold text-slate-800">
+                  <p className="font-bold text-slate-800 flex items-center gap-2">
                     {user.name || user.username}
+                    {user.is_active === false && (
+                      <span className="text-[9px] font-black uppercase tracking-wider text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full">
+                        Inactive
+                      </span>
+                    )}
                   </p>
                   <p className="text-xs text-slate-500 capitalize flex items-center gap-1">
                     {user.role} <span className="text-slate-300">•</span>{" "}
@@ -192,17 +216,39 @@ export default function AdminProfile() {
                 <button
                   onClick={() => handleEditClick(user)}
                   className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                  title="Edit User"
                 >
                   <Edit2 size={18} />
                 </button>
                 {user.username !== "admin" && (
-                  <button
-                    onClick={() => handleDeleteUser(user.id)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete User"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleToggleActive(user)}
+                      className={`p-2 rounded-lg transition-colors ${
+                        user.is_active === false
+                          ? "text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                          : "text-emerald-600 hover:bg-emerald-50"
+                      }`}
+                      title={
+                        user.is_active === false
+                          ? "Activate User"
+                          : "Deactivate User"
+                      }
+                    >
+                      {user.is_active === false ? (
+                        <UserX size={18} />
+                      ) : (
+                        <UserCheck size={18} />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove User"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>

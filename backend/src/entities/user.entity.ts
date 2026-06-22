@@ -22,6 +22,9 @@ export class User {
   @Column({ default: 'user' }) // admin, manager, employee
   role: string;
 
+  @Column({ default: true }) // false = deactivated (cannot log in)
+  is_active: boolean;
+
   @Column({ type: 'simple-json', nullable: true })
   permissions: any;
 }
