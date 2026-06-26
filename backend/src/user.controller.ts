@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  UseGuards,
-  Request,
-} from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Request, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { Repository } from 'typeorm';
@@ -28,11 +18,16 @@ export class UserController {
 
   @RequirePermission('staff')
   @Get()
-  findAll() {
-    return this.usersRepository.find();
+  async findAll() {
+    const users = await this.usersRepository.find();
+    // `permissions` is `simple-json any`; normalize so the admin UI never
+    // receives a non-array shape that breaks `permissions.includes(...)`.
+    return users.map((u) => ({
+      ...u,
+      permissions: AuthService.normalizePermissions(u.permissions),
+    }));
   }
 
-  // /profile is open to any authenticated user — they're reading their own JWT payload.
   @Get('profile')
   getProfile(@Request() req) {
     return req.user;
@@ -41,13 +36,19 @@ export class UserController {
   @RequirePermission('staff')
   @Post()
   create(@Body() user: any) {
-    // Use AuthService to register so password gets hashed
     return this.authService.register(user);
   }
 
   @RequirePermission('staff')
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateUser: Partial<User>) {
+  update(@Param('id') id: string, @Body() updateUser: any) {
+    // Coerce permissions to a clean string[] before persisting, so a bad
+    // payload can't reintroduce a non-array value into the DB.
+    if (updateUser && 'permissions' in updateUser) {
+      updateUser.permissions = AuthService.normalizePermissions(
+        updateUser.permissions,
+      );
+    }
     return this.usersRepository.update(id, updateUser);
   }
 

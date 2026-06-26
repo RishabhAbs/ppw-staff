@@ -230,6 +230,40 @@ export default function ItemDetailsPage({ onClose }: Props) {
         setImageSlots(compactImageSlots(newSlots));
     };
 
+    // --- Touch-based reorder (HTML5 drag events don't fire on touchscreens) ---
+    // Find the image-slot index currently under a touch point by walking up from
+    // the element at that coordinate to the nearest [data-slot-index] card.
+    const slotIndexFromPoint = (clientX: number, clientY: number): number | null => {
+        const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+        const card = el?.closest('[data-slot-index]') as HTMLElement | null;
+        if (!card) return null;
+        const idx = Number(card.getAttribute('data-slot-index'));
+        return Number.isNaN(idx) ? null : idx;
+    };
+
+    const handleTouchStart = (index: number, hasImage: boolean) => {
+        if (!hasImage) return;
+        setDragIndex(index);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (dragIndex === null) return;
+        // Prevent the page from scrolling while reordering.
+        e.preventDefault();
+        const t = e.touches[0];
+        const over = slotIndexFromPoint(t.clientX, t.clientY);
+        if (over !== null && over !== dragOverIndex) setDragOverIndex(over);
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        if (dragIndex === null) return;
+        const t = e.changedTouches[0];
+        const over = slotIndexFromPoint(t.clientX, t.clientY);
+        if (over !== null) reorderImages(dragIndex, over);
+        setDragIndex(null);
+        setDragOverIndex(null);
+    };
+
     const handleVideoUpload = (slotIndex: number, file: File) => {
         if (!file.type.startsWith('video/')) {
             alert('Please select a valid video file.');
@@ -499,13 +533,18 @@ export default function ItemDetailsPage({ onClose }: Props) {
                                     {imageSlots.map((slot, index) => (
                                         <div
                                             key={slot.slot}
+                                            data-slot-index={index}
                                             draggable={!!slot.previewUrl}
                                             onDragStart={(e) => { setDragIndex(index); e.dataTransfer.effectAllowed = 'move'; }}
                                             onDragOver={(e) => { if (dragIndex === null) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dragOverIndex !== index) setDragOverIndex(index); }}
                                             onDragLeave={() => { if (dragOverIndex === index) setDragOverIndex(null); }}
                                             onDrop={(e) => { e.preventDefault(); if (dragIndex !== null) reorderImages(dragIndex, index); setDragIndex(null); setDragOverIndex(null); }}
                                             onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
-                                            className={`relative bg-white border-2 border-dashed rounded-xl aspect-square flex flex-col items-center justify-center overflow-hidden transition-all group ${slot.previewUrl ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${dragOverIndex === index ? 'border-indigo-500 ring-2 ring-indigo-300 scale-[1.03]' : 'border-slate-200 hover:border-indigo-300'} ${dragIndex === index ? 'opacity-40' : ''}`}
+                                            onTouchStart={() => handleTouchStart(index, !!slot.previewUrl)}
+                                            onTouchMove={handleTouchMove}
+                                            onTouchEnd={handleTouchEnd}
+                                            style={{ touchAction: dragIndex !== null ? 'none' : undefined }}
+                                            className={`relative bg-white border-2 border-dashed rounded-xl aspect-square flex flex-col items-center justify-center transition-all group ${editMenuIndex === index ? '' : 'overflow-hidden'} ${slot.previewUrl ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${dragOverIndex === index ? 'border-indigo-500 ring-2 ring-indigo-300 scale-[1.03]' : 'border-slate-200 hover:border-indigo-300'} ${dragIndex === index ? 'opacity-40' : ''}`}
                                             onClick={() => { if (!slot.previewUrl) setActivePicker({ type: 'image', index }); }}
                                         >
                                             <div className="absolute top-1 left-1 w-4 h-4 rounded-full bg-slate-800/60 flex items-center justify-center z-10">
@@ -514,28 +553,27 @@ export default function ItemDetailsPage({ onClose }: Props) {
                                             {slot.previewUrl ? (
                                                 <>
                                                     <img src={slot.previewUrl} alt={`Image ${slot.slot}`} draggable={false} className="w-full h-full object-contain pointer-events-none" />
-                                                    {/* View (open fullscreen zoomable viewer) */}
-                                                    <button onClick={(e) => { e.stopPropagation(); setViewImageUrl(slot.previewUrl!); }} className="absolute top-1 right-[3.25rem] z-20 w-5 h-5 bg-indigo-600/80 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 active:scale-90 transition-all shadow-md" title="View">
-                                                        <Eye size={10} />
-                                                    </button>
-                                                    {/* Delete */}
-                                                    <button onClick={(e) => { e.stopPropagation(); handleRemoveImage(index); }} className="absolute top-1 right-1 z-20 w-5 h-5 bg-red-500/90 text-white rounded-full flex items-center justify-center hover:bg-red-600 active:scale-90 transition-all shadow-md" title="Delete">
-                                                        <Trash2 size={10} />
-                                                    </button>
-                                                    {/* Edit (opens Replace / Edit menu) */}
-                                                    <button onClick={(e) => { e.stopPropagation(); setEditMenuIndex(editMenuIndex === index ? null : index); }} className="absolute top-1 right-7 z-20 w-5 h-5 bg-slate-800/70 text-white rounded-full flex items-center justify-center hover:bg-slate-900 active:scale-90 transition-all shadow-md" title="Edit">
-                                                        <Pencil size={10} />
-                                                    </button>
+                                                    {/* Action buttons: single flex row so they stay evenly spaced and never overlap on narrow thumbnails */}
+                                                    <div className="absolute top-1 right-1 z-20 flex items-center gap-1" draggable={false}>
+                                                        {/* Edit (opens View / Replace / Edit menu) */}
+                                                        <button draggable={false} onClick={(e) => { e.stopPropagation(); setEditMenuIndex(editMenuIndex === index ? null : index); }} className="w-5 h-5 bg-slate-800/70 text-white rounded-full flex items-center justify-center hover:bg-slate-900 active:scale-90 transition-all shadow-md" title="Edit">
+                                                            <Pencil size={10} />
+                                                        </button>
+                                                        {/* Delete */}
+                                                        <button draggable={false} onClick={(e) => { e.stopPropagation(); handleRemoveImage(index); }} className="w-5 h-5 bg-red-500/90 text-white rounded-full flex items-center justify-center hover:bg-red-600 active:scale-90 transition-all shadow-md" title="Delete">
+                                                            <Trash2 size={10} />
+                                                        </button>
+                                                    </div>
                                                     {editMenuIndex === index && (
-                                                        <div className="absolute top-7 right-1 z-30 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden w-28" onClick={(e) => e.stopPropagation()}>
-                                                            <button onClick={() => { setEditMenuIndex(null); setViewImageUrl(slot.previewUrl!); }} className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors">
-                                                                <Eye size={12} className="text-indigo-500" /> View
+                                                        <div className="absolute top-7 left-1 right-1 z-30 bg-white rounded-lg shadow-xl border border-slate-100 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                                                            <button onClick={() => { setEditMenuIndex(null); setViewImageUrl(slot.previewUrl!); }} className="w-full flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+                                                                <Eye size={11} className="text-indigo-500 shrink-0" /> View
                                                             </button>
-                                                            <button onClick={() => { setEditMenuIndex(null); setActivePicker({ type: 'image', index }); }} className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors border-t border-slate-50">
-                                                                <RefreshCw size={12} className="text-indigo-500" /> Replace
+                                                            <button onClick={() => { setEditMenuIndex(null); setActivePicker({ type: 'image', index }); }} className="w-full flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition-colors border-t border-slate-50">
+                                                                <RefreshCw size={11} className="text-indigo-500 shrink-0" /> Replace
                                                             </button>
-                                                            <button onClick={() => { setEditMenuIndex(null); setEditImageIndex(index); }} className="w-full flex items-center gap-1.5 px-2.5 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50 transition-colors border-t border-slate-50">
-                                                                <Crop size={12} className="text-indigo-500" /> Edit
+                                                            <button onClick={() => { setEditMenuIndex(null); setEditImageIndex(index); }} className="w-full flex items-center gap-1 px-2 py-1.5 text-[10px] font-bold text-slate-600 hover:bg-slate-50 transition-colors border-t border-slate-50">
+                                                                <Crop size={11} className="text-indigo-500 shrink-0" /> Edit
                                                             </button>
                                                         </div>
                                                     )}
@@ -587,20 +625,24 @@ export default function ItemDetailsPage({ onClose }: Props) {
                                                         onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play()}
                                                         onMouseLeave={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
                                                     />
-                                                    {/* View (open fullscreen video player) */}
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); setViewVideoUrl(slot.previewUrl!); }}
-                                                        className="absolute top-1 right-7 w-5 h-5 bg-indigo-600/80 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 active:scale-90 transition-all shadow-md z-10"
-                                                        title="View"
-                                                    >
-                                                        <Eye size={10} />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleRemoveVideo(index); }}
-                                                        className="absolute top-1 right-1 w-5 h-5 bg-red-500/90 text-white rounded-full flex items-center justify-center hover:bg-red-600 active:scale-90 transition-all shadow-md z-10"
-                                                    >
-                                                        <Trash2 size={10} />
-                                                    </button>
+                                                    {/* Action buttons: single flex row so they stay evenly spaced and never overlap on narrow thumbnails */}
+                                                    <div className="absolute top-1 right-1 z-10 flex items-center gap-1">
+                                                        {/* View (open fullscreen video player) */}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setViewVideoUrl(slot.previewUrl!); }}
+                                                            className="w-5 h-5 bg-indigo-600/80 text-white rounded-full flex items-center justify-center hover:bg-indigo-700 active:scale-90 transition-all shadow-md"
+                                                            title="View"
+                                                        >
+                                                            <Eye size={10} />
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleRemoveVideo(index); }}
+                                                            className="w-5 h-5 bg-red-500/90 text-white rounded-full flex items-center justify-center hover:bg-red-600 active:scale-90 transition-all shadow-md"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 size={10} />
+                                                        </button>
+                                                    </div>
                                                     {/* Change overlay */}
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); videoInputRefs.current[index]?.click(); }}

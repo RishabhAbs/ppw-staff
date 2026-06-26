@@ -1,14 +1,4 @@
-import {
-  Controller,
-  Post,
-  Body,
-  UseGuards,
-  Request,
-  Get,
-  Param,
-  Patch,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { GodownEntry } from './entities/godown-entry.entity';
@@ -23,21 +13,7 @@ export class GodownController {
   ) {}
 
   private getCleanSql(column: string): string {
-    const specials = [
-      ' ',
-      '-',
-      '.',
-      '/',
-      '(',
-      ')',
-      '[',
-      ']',
-      '_',
-      '{',
-      '}',
-      '&',
-      '@',
-    ];
+    const specials = [' ', '-', '.', '/', '(', ')', '[', ']', '_', '{', '}', '&', '@'];
     let sql = column;
     for (const char of specials) {
       sql = `REPLACE(${sql}, '${char}', '')`;
@@ -46,16 +22,14 @@ export class GodownController {
   }
 
   @Post('entries')
-  async create(@Body() entryData: Partial<GodownEntry>, @Request() req) {
+  async create(@Body() entryData: any, @Request() req: any) {
     try {
       const entry = this.godownRepository.create({
         ...entryData,
-        user_id: req.user.sub, // From JWT payload
-        user_name: req.user.username || req.user.name, // Persist name
+        user_id: req.user.sub,
+        user_name: req.user.username || req.user.name,
       });
-      // Remove potentially dangerous manual overrides if any
       if ((entry as any).id) delete (entry as any).id;
-
       return await this.godownRepository.save(entry);
     } catch (error) {
       console.error('Error creating godown entry:', error);
@@ -65,10 +39,10 @@ export class GodownController {
 
   @Get('entries')
   async findAll(
-    @Request() req,
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '50',
-    @Query('search') search: string = '',
+    @Request() req: any,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+    @Query('search') search = '',
   ) {
     try {
       const user = req.user;
@@ -81,20 +55,16 @@ export class GodownController {
         .leftJoinAndSelect('entry.user', 'user')
         .orderBy('entry.created_at', 'DESC');
 
-      // If not admin, restrict to own entries
       if (user.role !== 'admin') {
         query.where('entry.user_id = :userId', { userId: user.sub });
       }
 
-      // Add search condition
       if (search) {
         const sanitizedSearch = search.replace(/[^a-zA-Z0-9]/g, '');
         const cleanItemName = this.getCleanSql('entry.item_name');
         const cleanBrand = this.getCleanSql('entry.brand');
         const cleanSku = this.getCleanSql('entry.sku');
-
         const searchCondition = `(${cleanItemName} LIKE :search OR ${cleanBrand} LIKE :search OR ${cleanSku} LIKE :search)`;
-
         if (user.role !== 'admin') {
           query.andWhere(searchCondition, { search: `%${sanitizedSearch}%` });
         } else {
@@ -122,19 +92,12 @@ export class GodownController {
     }
   }
 
-  // New Update Endpoint
-  @Post('entries/:id') // Using POST for compatibility, could be PATCH
-  async update(
-    @Request() req,
-    @Body() updateData: Partial<GodownEntry>,
-    @Param('id') id: string,
-  ) {
+  @Post('entries/:id')
+  async update(@Request() req: any, @Body() updateData: any, @Param('id') id: string) {
     try {
       const user = req.user;
       const entryId = parseInt(id);
-      console.log(
-        `Debug: Updating entry ${entryId} by user ${user.username} (${user.sub})`,
-      ); // Console log for immediate visibility
+      console.log(`Debug: Updating entry ${entryId} by user ${user.username} (${user.sub})`);
 
       const entry = await this.godownRepository.findOne({
         where: { id: entryId },
@@ -145,26 +108,21 @@ export class GodownController {
         throw new Error('Entry not found');
       }
 
-      // Permission Check: Owner or Admin
       if (entry.user_id !== user.sub && user.role !== 'admin') {
         console.warn(`Debug: Unauthorized access to entry ${entryId}`);
         throw new Error('Unauthorized to edit this entry');
       }
 
-      // Sanitize updateData to prevent overwriting critical fields
       delete updateData.id;
       delete updateData.user_id;
       delete updateData.created_at;
-
       console.log('Debug: Applying updates:', updateData);
 
-      // Apply updates
       Object.assign(entry, updateData);
-
       return await this.godownRepository.save(entry);
     } catch (error) {
       console.error('Debug: Error updating godown entry:', error);
-      throw error; // Let NestJS handle the 500, but now we have logs
+      throw error;
     }
   }
 }

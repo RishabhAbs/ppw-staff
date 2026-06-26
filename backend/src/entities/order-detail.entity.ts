@@ -1,9 +1,4 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  ManyToOne,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { Order } from './order.entity';
 
 @Entity()
@@ -15,7 +10,7 @@ export class OrderDetail {
   order: Order;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  stock_item_id: string | null;
+  stock_item_id: string | number;
 
   @Column({ nullable: true })
   item_name: string;

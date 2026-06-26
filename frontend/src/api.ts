@@ -25,14 +25,29 @@ api.interceptors.request.use(
     }
 );
 
-// Add a response interceptor to handle 401 errors
+// Add a response interceptor to handle 401 errors.
+//
+// Only force a logout when the request was actually sent WITHOUT a token, or
+// when the token has been rejected on a real request. A blanket
+// "any 401 => wipe session + redirect" is too aggressive: right after login a
+// data call (e.g. /reports/orders draft check) could momentarily race the
+// service worker / token and return 401, which would instantly bounce the
+// freshly-logged-in user back to /login. We also never redirect when already
+// on /login (avoids a reload loop on the login screen itself).
 api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
+            const hadToken = !!localStorage.getItem('token');
+            const onLoginPage = window.location.pathname === '/login';
+            const sentToken = !!error.config?.headers?.Authorization;
+            // Real auth failure: the server rejected a request we DID send a
+            // token with (expired/invalid), or there was never a token at all.
+            if (!onLoginPage && (!hadToken || sentToken)) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+            }
         }
         return Promise.reject(error);
     }
@@ -229,11 +244,42 @@ export const updateGodownEntry = async (id: number, entryData: any) => {
 };
 
 // Safe User Parser
+// Normalize a stored permissions value WITHOUT destroying its shape. The admin
+// UI saves a structured object { system: string[], orderTypes, godowns, ... };
+// hasPermission()/getDefaultRoute read either a flat string[] OR
+// permissions.system, so both shapes are valid and must be preserved. Mirror of
+// the backend's AuthService.normalizePermissions — only cleans genuine garbage.
+const normalizePermissions = (value: any): string[] | Record<string, any> => {
+    if (Array.isArray(value)) return value.filter((p) => typeof p === 'string');
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return [];
+        try {
+            // Recurse so a JSON-encoded object keeps its structure.
+            return normalizePermissions(JSON.parse(trimmed));
+        } catch {
+            // not JSON — treat as comma-separated
+        }
+        return trimmed.split(',').map((p) => p.trim()).filter(Boolean);
+    }
+    if (value && typeof value === 'object') {
+        const system = Array.isArray(value.system)
+            ? value.system.filter((p: any) => typeof p === 'string')
+            : [];
+        return { ...value, system };
+    }
+    return [];
+};
+
 export const getUser = () => {
     try {
         const userStr = localStorage.getItem('user');
         if (!userStr || userStr === 'undefined' || userStr === 'null') return {};
-        return JSON.parse(userStr);
+        const user = JSON.parse(userStr);
+        if (user && typeof user === 'object') {
+            user.permissions = normalizePermissions(user.permissions);
+        }
+        return user;
     } catch (e) {
         return {};
     }

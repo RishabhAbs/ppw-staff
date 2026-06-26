@@ -1,13 +1,4 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  ManyToOne,
-  OneToMany,
-  JoinColumn,
-  Index,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Ledger } from './ledger.entity';
 import { OrderDetail } from './order-detail.entity';
 import { User } from './user.entity';
@@ -32,7 +23,7 @@ export class Order {
     enum: ['inedit', 'pending', 'completed', 'fetched'],
     default: 'inedit',
   })
-  status: 'inedit' | 'pending' | 'completed' | 'fetched';
+  status: string;
 
   @ManyToOne(() => Ledger, { nullable: true })
   ledger: Ledger;

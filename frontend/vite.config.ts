@@ -30,6 +30,19 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      workbox: {
+        // Take control of open pages as soon as a new SW is published so users
+        // never get stuck on a stale app shell after a deploy (the cause of the
+        // post-login bounce to /login).
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        // The SPA navigation fallback must NEVER swallow API or auth requests —
+        // otherwise the SW intercepts /api/* calls and they can resolve from a
+        // stale/precached response (seen as spurious 401s that logged users out).
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/auth\//, /^\/public\//],
+      },
       manifest: {
         name: 'PPW',
         short_name: 'PPW', // Shortened for home screen

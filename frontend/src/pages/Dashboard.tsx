@@ -23,15 +23,15 @@ export default function Dashboard() {
     const [syncingLedgers, setSyncingLedgers] = useState(false);
     const [syncingStock, setSyncingStock] = useState(false);
 
-    // Non-admins don't get the admin dashboard. Send them to a page they're
-    // actually permitted to see. Previously this hardcoded navigate('/orders'),
-    // but a user without the 'reports' permission can't access /orders — the
-    // AuthGuard bounced them back to '/', which re-ran this effect, producing
-    // an infinite Dashboard <-> /orders redirect loop (blank screen + Chrome
-    // navigation throttling). Route by permission instead.
+    // Redirect away ONLY if this user can't actually access the dashboard.
+    // A non-admin who has been granted the 'dashboard' permission legitimately
+    // sees the Home tab and must be allowed to stay here when they tap it —
+    // previously every non-admin was bounced to /orders, so Home did nothing
+    // for them. Users WITHOUT dashboard access are still routed to a page they
+    // can see (the loop-guard the original code was added for).
     useEffect(() => {
         const user = getUser();
-        if (user.role === 'admin') return;
+        if (canAccess(user, '/')) return; // admin, or has 'dashboard' — stay.
         // Prefer /orders if they can see it; otherwise their permission-based default.
         const target = canAccess(user, '/orders') ? '/orders' : getDefaultRoute(user);
         // Never navigate to '/' (this page) — that would loop straight back here.

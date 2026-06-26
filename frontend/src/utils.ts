@@ -2,7 +2,11 @@
 // in app.controller.ts. `null` means any authenticated user can hit it.
 // Admins bypass everything (same as backend PermissionsGuard).
 export function pathPermission(path: string): string | null {
-  if (path === '/') return 'dashboard';
+  // Dashboard is admin-only. Returning the '__admin__' sentinel means only the
+  // admin-role bypass in hasPermission() can satisfy it — no employee is ever
+  // granted this permission, so non-admins never see Home/Dashboard and are
+  // routed to their first real page (e.g. /orders) on login.
+  if (path === '/') return '__admin__';
   if (path === '/orders') return 'reports';            // order list view
   if (path === '/orders/edit' || path.startsWith('/orders/')) return 'orders'; // order detail/edit
   if (path === '/create-order') return 'orders';
@@ -28,6 +32,13 @@ export function hasPermission(user: any, perm: string | null): boolean {
 }
 
 export function canAccess(user: any, path: string): boolean {
+  // The order History list (/orders) should be visible to anyone who works with
+  // orders, so grant it on either `reports` (its own perm) OR `orders` (New
+  // Order). Without this, a user given only "New Order" never sees the History
+  // tab even though they can create the orders it lists.
+  if (path === '/orders') {
+    return hasPermission(user, 'reports') || hasPermission(user, 'orders');
+  }
   return hasPermission(user, pathPermission(path));
 }
 
@@ -36,7 +47,9 @@ export function canAccess(user: any, path: string): boolean {
 export function getDefaultRoute(user: any): string {
   if (!user) return '/login';
   if (user.role === 'admin') return '/';
-  const candidates = ['/', '/orders', '/create-order', '/stock-items', '/godown', '/profile'];
+  // On a fresh open, prefer the New Order page when the user can create orders;
+  // then fall back to History and the rest.
+  const candidates = ['/create-order', '/orders', '/stock-items', '/godown', '/profile'];
   for (const p of candidates) {
     if (canAccess(user, p)) return p;
   }

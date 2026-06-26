@@ -1,78 +1,63 @@
-# ##############################################################################
-# PPW Single Root Gitignore
-# ##############################################################################
+# ---- Secrets / env (NEVER commit) ----
+.env
+.env.*
+*.env
+**/.env
+**/.env.*
+!.env.example
+backend/.env
+frontend/.env
+backend/.env.local.bak
 
-# Node / Dependencies
+# ---- Dependencies ----
 node_modules/
+**/node_modules/
+
+# ---- Build output ----
 dist/
-dist-ssr/
+**/dist/
 build/
-out/
+**/build/
+frontend/dev-dist/
+
+# ---- Deploy artifacts / scratch ----
+.deploy_build/
+.deploy_lean/
+.deploy_stage/
+*.zip
+ppw_deploy*.zip
+ppw_deploy*.txt
+
+# ---- Database dumps / backups ----
+*.sql
+backup_db_*.sql
+prod_fresh*.sql
+
+# ---- Mobile / Android build ----
+*.apk
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/capacitor-cordova-android-plugins/build/
+frontend/android/local.properties
+frontend/android_corrupt_backup/
+**/.gradle/
+
+# ---- Logs ----
+*.log
+dev-server.log
+tail_logs.txt
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 
-# Runtime logs / startup scratch files
-*.log
-*.err
-backend/_startup.*
-backend/ppw-*.log
+# ---- Stray / duplicate dirs ----
+backend;C/
 
-# Environment / Secret Files
-.env
-.env.*
-!.env.example
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# OS Specific
+# ---- OS / editor ----
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
-
-# IDE / Editor
-.vscode/
-!.vscode/extensions.json
 .idea/
 *.swp
-*.swo
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-
-# Root Level Deployment & Temporary Files
-/*.zip
-/*.sql
-/*.json
-/*.ps1
-/*.js
-/*.txt
-/*.png
-/*.log
-/*.postman_collection.json
-
-# Specialized Folders
-/cpanel_deploy/
-/deploy/
-/deployment_package/
-/.agent/
-/.gemini/
-/android/
-
-# White-list the essential directories
-!/frontend/
-!/backend/
-
-# Essential files in root (if any)
-!/.gitignore
-!/README.md
-!/docker-compose.yml
-!/.htaccess_production
+.vscode/*
+!.vscode/extensions.json

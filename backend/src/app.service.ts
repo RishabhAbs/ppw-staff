@@ -27,14 +27,9 @@ export class AppService implements OnModuleInit {
       console.log('Default admin user created: admin / password');
     } else if (admin.password === 'password') {
       console.log('Migrating admin password to hash...');
-      // Update with hashed password
       const salt = await bcrypt.genSalt();
       const hashedPassword = await bcrypt.hash('password', salt);
-
-      await this.userRepository.update(
-        { id: admin.id },
-        { password: hashedPassword },
-      );
+      await this.userRepository.update({ id: admin.id }, { password: hashedPassword });
       console.log('Admin password migrated.');
     }
   }

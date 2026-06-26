@@ -209,7 +209,13 @@ function Layout() {
     return () => clearInterval(interval);
   }, [location, showNapModal]);
 
-  const hideNav = location.pathname === '/login' || location.pathname === '/attach-barcode';
+  // CreateOrder renders its own bottom action bar (Total / Cancel / Tally /
+  // Save); the app nav must hide there or it covers those buttons.
+  const hideNav =
+    location.pathname === '/login' ||
+    location.pathname === '/attach-barcode' ||
+    location.pathname === '/create-order' ||
+    location.pathname.startsWith('/orders/edit');
 
   const user = getUser();
   const role = user?.role;

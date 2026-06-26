@@ -4,6 +4,7 @@ import { Save, Scan, X, ChevronLeft, Search, ArrowRight, UserPlus, ChevronDown, 
 import BarcodeScanner from '../components/BarcodeScanner';
 import { getLedgers, getItemByBarcode, createOrder, getStockItems, createLedger, getOrderById, getOrderDetails, updateOrder, syncOrderToTally, getLiveStock, getDraftOrders, getStockParents, getStockCategories, getUser } from '../api';
 import { useToast } from '../context/ToastContext';
+import { getDefaultRoute, canAccess } from '../utils';
 
 interface StockItem {
     id: number;
@@ -59,6 +60,22 @@ export default function CreateOrder() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
     const isEditMode = !!id;
+
+    // Back navigation that never escapes the app or logs the user out.
+    // history.length is unreliable here: after login redirects with
+    // window.location.href, the browser history still contains /login, so
+    // navigate(-1) would land back on the login screen and effectively log the
+    // user out. Instead, always send them to their permitted default page.
+    const safeBack = () => {
+        const target = getDefaultRoute(getUser());
+        // If New Order *is* the default page, there's nowhere "back" to go —
+        // fall back to History when permitted, else just stay put.
+        if (target === '/create-order') {
+            navigate(canAccess(getUser(), '/orders') ? '/orders' : '/create-order', { replace: true });
+        } else {
+            navigate(target, { replace: true });
+        }
+    };
     const { showToast } = useToast();
     const [isLocked, setIsLocked] = useState(false);
 
@@ -272,7 +289,7 @@ export default function CreateOrder() {
     const [itemQty, setItemQty] = useState<string>('');
     const [itemRate, setItemRate] = useState<string>('');
     const [itemDiscount, setItemDiscount] = useState<string>('0');
-    const [itemLivestockType, setItemLivestockType] = useState<string>('Shop');
+    const [itemLivestockType, setItemLivestockType] = useState<string>(defaultGodown);
     const [shopStock, setShopStock] = useState<string>('0');
     const [pbStock, setPbStock] = useState<string>('0');
     const [isFetchingLiveStock, setIsFetchingLiveStock] = useState(false);
@@ -572,7 +589,7 @@ export default function CreateOrder() {
         setItemQty('');
         setItemRate('');
         setItemDiscount('0');
-        setItemLivestockType('');
+        setItemLivestockType(defaultGodown);
         setSelectedSchemeName('');
         setEditingIndex(null);
         setShowRateDropdown(false);
@@ -641,7 +658,7 @@ export default function CreateOrder() {
             {/* Header */}
             <div className="bg-white border-b border-slate-200 px-3 py-2 sticky top-0 z-40 shadow-sm flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(-1)} className="p-1 rounded hover:bg-slate-100">
+                    <button onClick={safeBack} className="p-1 rounded hover:bg-slate-100">
                         <ChevronLeft size={24} className="text-slate-600" />
                     </button>
                     <img src="/ppw-logo.png" alt="Logo" className="w-8 h-8 object-contain" />
@@ -888,7 +905,7 @@ export default function CreateOrder() {
                 <div className="flex items-center gap-3">
                     <button onClick={() => setShowCashCalc(true)} className="flex-none pr-4 border-r border-slate-200 text-left active:scale-95 transition-transform"><span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-tighter block -mb-1">Total Amount</span><div className="text-2xl font-black text-slate-800 tracking-tight">₹{Math.round(calculateTotalWithTax()).toLocaleString('en-IN')}</div></button>
                     <div className="flex-1 flex gap-2">
-                        <button onClick={() => { if (items.length > 0 && !confirm('Discard changes?')) return; navigate(-1); }} className="flex-1 py-3 text-slate-500 font-bold bg-slate-100/50 rounded-xl active:scale-95 text-xs uppercase">{isLocked ? 'Back' : 'Cancel'}</button>
+                        <button onClick={() => { if (items.length > 0 && !confirm('Discard changes?')) return; safeBack(); }} className="flex-1 py-3 text-slate-500 font-bold bg-slate-100/50 rounded-xl active:scale-95 text-xs uppercase">{isLocked ? 'Back' : 'Cancel'}</button>
                         {!isLocked && (
                             <>
                                 <button onClick={() => handleSaveOrder(true)} disabled={items.length === 0 || !selectedLedger || isSaving} className="flex-[1.2] py-3 bg-indigo-50 text-indigo-700 font-bold rounded-xl active:scale-95 border border-indigo-100 flex items-center justify-center gap-1.5 text-xs disabled:opacity-50 uppercase"><ArrowRight size={16} /> Tally</button>
@@ -912,7 +929,7 @@ export default function CreateOrder() {
                             <button onClick={handleClosePopup} className="p-2 hover:bg-slate-50 rounded-full transition-all text-slate-300"><X size={20} strokeWidth={3} /></button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-5 pb-8 space-y-6">
+                        <div className="flex-1 overflow-y-auto p-5 pb-32 space-y-6" style={{ paddingBottom: 'calc(8rem + env(safe-area-inset-bottom))' }}>
                             {!foundItem ? (
                                 <div className="relative">
                                     <Scan className="absolute left-3 top-3.5 text-indigo-500" size={20} />

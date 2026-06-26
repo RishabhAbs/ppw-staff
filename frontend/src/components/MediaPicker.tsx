@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Camera, Image, Check, RefreshCcw, Circle, Square } from 'lucide-react';
+import { X, Camera, Image, Check, RefreshCcw, Circle, Square, Crop } from 'lucide-react';
 import ImageEditor from './ImageEditor';
 import ZoomableImage from './ZoomableImage';
 
@@ -21,7 +21,19 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
     const [recording, setRecording] = useState(false);
     const [recordedVideo, setRecordedVideo] = useState<{ url: string; file: File } | null>(null);
     const [elapsed, setElapsed] = useState(0);
+    // Holds the live camera stream so an effect can (re)attach it to the
+    // <video> once that element is actually mounted. Attaching inline in
+    // startCamera() races the render: on first open the video isn't mounted
+    // yet, so the stream never binds and the preview stays black.
+    const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
+    // Digital zoom for the live preview. A live <video> can't be pinch-zoomed by
+    // the browser, so we scale ONLY the video element via CSS transform, clipped
+    // inside its container — the popup itself never moves.
+    const [zoom, setZoom] = useState(1);
+    const pinchStartDist = useRef<number | null>(null);
+    const pinchStartZoom = useRef(1);
     const videoRef = useRef<HTMLVideoElement>(null);
+    const camWrapRef = useRef<HTMLDivElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const recorderRef = useRef<MediaRecorder | null>(null);
@@ -38,22 +50,137 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
         };
     }, []);
 
-    const startCamera = async () => {
+    // While this modal is open, lock the page so a pinch gesture can't zoom the
+    // whole viewport (which made the entire popup scale). We force the viewport
+    // meta to user-scalable=no for the modal's lifetime and restore it on close.
+    useEffect(() => {
+        const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+        const prev = meta?.getAttribute('content') ?? null;
+        if (meta) {
+            meta.setAttribute(
+                'content',
+                'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no',
+            );
+        }
+        // Belt-and-braces: swallow the iOS Safari gesture* events, which ignore
+        // the viewport meta and zoom the page anyway.
+        const stopGesture = (e: Event) => e.preventDefault();
+        document.addEventListener('gesturestart', stopGesture, { passive: false });
+        document.addEventListener('gesturechange', stopGesture, { passive: false });
+        // DESKTOP: block the browser's page zoom entirely while the modal is open
+        // — Ctrl+wheel (trackpad pinch / Ctrl+scroll) and Ctrl +/-/0 keys. Without
+        // this the whole page (and popup) scales instead of the image.
+        const stopCtrlWheel = (e: WheelEvent) => { if (e.ctrlKey) e.preventDefault(); };
+        const stopCtrlZoomKeys = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) e.preventDefault();
+        };
+        window.addEventListener('wheel', stopCtrlWheel, { passive: false });
+        window.addEventListener('keydown', stopCtrlZoomKeys);
+        return () => {
+            if (meta && prev !== null) meta.setAttribute('content', prev);
+            document.removeEventListener('gesturestart', stopGesture);
+            document.removeEventListener('gesturechange', stopGesture);
+            window.removeEventListener('wheel', stopCtrlWheel);
+            window.removeEventListener('keydown', stopCtrlZoomKeys);
+        };
+    }, []);
+
+    // Bind the active stream to the <video> whenever either becomes available.
+    // Runs after the camera step renders the element, so it never races the
+    // stream acquisition. The explicit play() is needed on mobile browsers
+    // that don't reliably autostart a freshly-attached MediaStream.
+    useEffect(() => {
+        const video = videoRef.current;
+        if (step !== 'camera' || !video || !activeStream) return;
+        if (video.srcObject !== activeStream) {
+            video.srcObject = activeStream;
+        }
+        video.muted = true;
+        const playPromise = video.play();
+        if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(() => { /* autoplay may reject; user gesture already occurred */ });
+        }
+    }, [step, activeStream]);
+
+    // Pinch on the live preview = digital zoom of the VIDEO only. We capture the
+    // gesture with non-passive native listeners (so preventDefault actually stops
+    // the page/popup from zooming) and translate the finger spread into a CSS
+    // scale on the <video>. The popup stays fixed; only the image grows/shrinks.
+    useEffect(() => {
+        const el = camWrapRef.current;
+        if (step !== 'camera' || !el) return;
+
+        const dist = (t: TouchList) => {
+            const dx = t[0].clientX - t[1].clientX;
+            const dy = t[0].clientY - t[1].clientY;
+            return Math.hypot(dx, dy);
+        };
+        const onStart = (e: TouchEvent) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                pinchStartDist.current = dist(e.touches);
+                pinchStartZoom.current = zoom;
+            }
+        };
+        const onMove = (e: TouchEvent) => {
+            if (e.touches.length === 2 && pinchStartDist.current) {
+                e.preventDefault();
+                const ratio = dist(e.touches) / pinchStartDist.current;
+                // Clamp 1x–4x; below 1x there's nothing to show outside the frame.
+                const next = Math.min(4, Math.max(1, pinchStartZoom.current * ratio));
+                setZoom(next);
+            }
+        };
+        const onEnd = (e: TouchEvent) => {
+            if (e.touches.length < 2) pinchStartDist.current = null;
+        };
+        // DESKTOP: a trackpad pinch / Ctrl+scroll arrives as a wheel event with
+        // ctrlKey set — that is what triggers the browser's page zoom. Capture it
+        // here and convert it into our digital zoom instead, on the whole popup so
+        // the gesture is caught even if it starts slightly off the video.
+        const onWheel = (e: WheelEvent) => {
+            if (!e.ctrlKey) return;          // normal scroll passes through
+            e.preventDefault();              // stop browser page zoom
+            setZoom((z) => Math.min(4, Math.max(1, z - e.deltaY * 0.01)));
+        };
+        el.addEventListener('touchstart', onStart, { passive: false });
+        el.addEventListener('touchmove', onMove, { passive: false });
+        el.addEventListener('touchend', onEnd);
+        el.addEventListener('touchcancel', onEnd);
+        el.addEventListener('wheel', onWheel, { passive: false });
+        return () => {
+            el.removeEventListener('touchstart', onStart);
+            el.removeEventListener('touchmove', onMove);
+            el.removeEventListener('touchend', onEnd);
+            el.removeEventListener('touchcancel', onEnd);
+            el.removeEventListener('wheel', onWheel);
+        };
+    }, [step, zoom]);
+
+    // Reset zoom whenever we (re)enter the camera or flip cameras.
+    useEffect(() => { if (step !== 'camera') setZoom(1); }, [step]);
+
+    const startCamera = async (facing: 'environment' | 'user' = cameraFacing) => {
         setError(null);
         try {
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
             }
             // Video records with audio; photo capture is video-only.
+            // Request the highest practical resolution so captured photos are
+            // sharp. `ideal` lets the browser fall back gracefully on devices
+            // that can't hit 4K instead of failing outright.
             const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: cameraFacing },
+                video: {
+                    facingMode: facing,
+                    width: { ideal: 3840 },
+                    height: { ideal: 2160 },
+                },
                 audio: type === 'video',
             });
             streamRef.current = stream;
-            if (videoRef.current) {
-                videoRef.current.srcObject = stream;
-                videoRef.current.muted = true; // avoid echo of own mic while filming
-            }
+            // Attach via the effect once the <video> is mounted (see above).
+            setActiveStream(stream);
             setStep('camera');
         } catch (err: any) {
             console.error('Camera access error:', err);
@@ -116,13 +243,25 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
 
     const handleCapture = () => {
         if (!videoRef.current) return;
+        const video = videoRef.current;
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
         const canvas = document.createElement('canvas');
-        canvas.width = videoRef.current.videoWidth;
-        canvas.height = videoRef.current.videoHeight;
+        // Crop the source frame to match the on-screen digital zoom so the saved
+        // photo is exactly what the user framed (a centred crop at `zoom`).
+        const cropW = vw / zoom;
+        const cropH = vh / zoom;
+        const sx = (vw - cropW) / 2;
+        const sy = (vh - cropH) / 2;
+        // Keep output at full crop resolution for sharpness.
+        canvas.width = cropW;
+        canvas.height = cropH;
         const ctx = canvas.getContext('2d');
         if (ctx) {
-            ctx.drawImage(videoRef.current, 0, 0);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            ctx.drawImage(video, sx, sy, cropW, cropH, 0, 0, cropW, cropH);
+            // High quality — the backend re-compresses to webp, so capture as
+            // sharp as possible here to preserve detail through that pipeline.
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
             setCapturedImage(dataUrl);
             setStep('preview');
             // Stop camera stream after capture to save battery/resource
@@ -130,18 +269,27 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
                 streamRef.current.getTracks().forEach(track => track.stop());
                 streamRef.current = null;
             }
+            setActiveStream(null);
         }
     };
 
-    const handleConfirm = () => {
-        if (!capturedImage) return;
-        // Convert dataURL to File, then send to the crop/rotate editor.
-        fetch(capturedImage)
-            .then(res => res.blob())
-            .then(blob => {
-                const file = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                setEditingFile(file);
-            });
+    // Convert the captured dataURL into a File (shared by "Use Photo" and "Edit").
+    const capturedToFile = async () => {
+        if (!capturedImage) return null;
+        const blob = await (await fetch(capturedImage)).blob();
+        return new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+    };
+
+    // "Use Photo" — open the rotate/crop editor before saving.
+    const handleConfirm = async () => {
+        const file = await capturedToFile();
+        if (file) setEditingFile(file);
+    };
+
+    // "Edit" — same editor, opened directly from the preview for rotate/crop.
+    const handleEdit = async () => {
+        const file = await capturedToFile();
+        if (file) setEditingFile(file);
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -157,9 +305,12 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
     };
 
     const flipCamera = () => {
-        setCameraFacing(prev => prev === 'environment' ? 'user' : 'environment');
-        // Restart camera with new facing mode
-        setTimeout(startCamera, 100);
+        const next = cameraFacing === 'environment' ? 'user' : 'environment';
+        setCameraFacing(next);
+        setZoom(1);
+        // Restart with the new facing mode immediately — don't wait on the
+        // async state update or a fragile setTimeout.
+        startCamera(next);
     };
 
     return (
@@ -192,8 +343,8 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
                 <div className="p-6">
                     {step === 'choice' && (
                         <div className="grid grid-cols-2 gap-4">
-                            <button 
-                                onClick={startCamera}
+                            <button
+                                onClick={() => startCamera()}
                                 className="flex flex-col items-center justify-center gap-3 p-6 bg-indigo-50 border-2 border-indigo-100 rounded-2xl hover:bg-indigo-100 hover:border-indigo-200 transition-all group"
                             >
                                 <div className="w-12 h-12 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg group-active:scale-90 transition-transform">
@@ -224,13 +375,31 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
 
                     {step === 'camera' && (
                         <div className="space-y-4">
-                            <div className="relative bg-black rounded-2xl overflow-hidden aspect-[3/4] shadow-inner">
-                                <video 
-                                    ref={videoRef} 
-                                    autoPlay 
-                                    playsInline 
-                                    className="w-full h-full object-cover"
+                            <div
+                                ref={camWrapRef}
+                                className="relative bg-black rounded-2xl overflow-hidden aspect-[3/4] shadow-inner"
+                                style={{ touchAction: 'none' }}
+                            >
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    playsInline
+                                    muted
+                                    onLoadedMetadata={(e) => {
+                                        // Mobile browsers may not paint a freshly-attached
+                                        // MediaStream until metadata loads; force play here.
+                                        const v = e.currentTarget;
+                                        const p = v.play();
+                                        if (p && typeof p.catch === 'function') p.catch(() => {});
+                                    }}
+                                    className="w-full h-full object-cover transition-transform duration-75"
+                                    style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
                                 />
+                                {zoom > 1.01 && (
+                                    <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                                        {zoom.toFixed(1)}×
+                                    </div>
+                                )}
                                 {error && (
                                     <div className="absolute inset-0 flex items-center justify-center p-6 text-center">
                                         <p className="text-white text-sm font-medium">{error}</p>
@@ -292,19 +461,27 @@ export default function MediaPicker({ type, onFileSelect, onClose }: Props) {
                                 Pinch or double-tap to zoom in and check sharpness before using.
                             </p>
 
-                            <div className="flex gap-4">
-                                <button 
-                                    onClick={() => { setCapturedImage(null); startCamera(); }}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition-all active:scale-95"
-                                >
-                                    <X size={20} /> Retake
-                                </button>
+                            <div className="space-y-3">
                                 <button
-                                    onClick={handleConfirm}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-200"
+                                    onClick={handleEdit}
+                                    className="w-full flex items-center justify-center gap-2 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-bold hover:bg-indigo-100 transition-all active:scale-95"
                                 >
-                                    <Check size={20} /> Use Photo
+                                    <Crop size={20} /> Rotate / Crop
                                 </button>
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => { setCapturedImage(null); startCamera(); }}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100 transition-all active:scale-95"
+                                    >
+                                        <X size={20} /> Retake
+                                    </button>
+                                    <button
+                                        onClick={handleConfirm}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-all active:scale-95 shadow-lg shadow-emerald-200"
+                                    >
+                                        <Check size={20} /> Use Photo
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}

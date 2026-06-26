@@ -244,17 +244,28 @@ export default function ImageEditor({ source, onConfirm, onClose }: Props) {
             fctx.drawImage(img, -img.width / 2, -img.height / 2);
             fctx.restore();
 
+            // Cap the exported dimensions. A modern phone camera produces
+            // multi-megapixel crops that serialize to several MB of JPEG —
+            // enough to blow past upload limits and make saves intermittently
+            // fail, especially with 2+ images in one request. The backend
+            // re-compresses to 800px webp anyway, so anything beyond ~1600px is
+            // wasted bytes. Downscale here to keep payloads small and reliable.
+            const MAX_OUT = 1600;
+            const outScale = Math.min(1, MAX_OUT / Math.max(cropW, cropH));
+            const outW = Math.max(1, Math.round(cropW * outScale));
+            const outH = Math.max(1, Math.round(cropH * outScale));
+
             const out = document.createElement('canvas');
-            out.width = cropW;
-            out.height = cropH;
+            out.width = outW;
+            out.height = outH;
             const octx = out.getContext('2d');
             if (!octx) throw new Error('no ctx');
             octx.fillStyle = '#ffffff';
-            octx.fillRect(0, 0, cropW, cropH);
-            octx.drawImage(full, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+            octx.fillRect(0, 0, outW, outH);
+            octx.drawImage(full, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
 
             // Stamp the two-line watermark onto the final cropped image.
-            drawWatermark(octx, cropW, cropH);
+            drawWatermark(octx, outW, outH);
 
             const blob: Blob = await new Promise((resolve, reject) =>
                 out.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.9),

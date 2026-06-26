@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
 
 @Entity('stock_item')
 export class StockItem {
@@ -44,14 +44,12 @@ export class StockItem {
   @Column({ nullable: true })
   rate_one_5: string;
 
-
   @Column({ nullable: true })
   default_mrp: string;
 
   @Column({ nullable: true })
   ats_barcode: string;
 
-  // Additional fields used by backend logic but not in dump
   @Column({ nullable: true })
   group: string;
 

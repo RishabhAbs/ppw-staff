@@ -19,6 +19,7 @@ import {
   Box,
   UserCheck,
   UserX,
+  LogOut,
 } from "lucide-react";
 
 export default function AdminProfile() {
@@ -144,6 +145,15 @@ export default function AdminProfile() {
     }
   };
 
+  // Logs out the CURRENT session (JWT is per-browser; this cannot end another
+  // user's remote session). Same behavior as the nav logout.
+  const handleLogout = () => {
+    if (!confirm("Log out of the current session?")) return;
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  };
+
   const handleToggleActive = async (user: any) => {
     const nextActive = user.is_active === false; // currently inactive -> activate
     const action = nextActive ? "activate" : "deactivate";
@@ -219,6 +229,13 @@ export default function AdminProfile() {
                   title="Edit User"
                 >
                   <Edit2 size={18} />
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="p-2 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                  title="Logout"
+                >
+                  <LogOut size={18} />
                 </button>
                 {user.username !== "admin" && (
                   <>
@@ -375,7 +392,8 @@ export default function AdminProfile() {
                       {[
                         { id: "dashboard", label: "Dashboard" },
                         { id: "inventory", label: "Inventory" },
-                        { id: "orders", label: "Orders" },
+                        { id: "reports", label: "Order History" },
+                        { id: "orders", label: "New Order" },
                         { id: "staff", label: "Staff" },
                         { id: "ledgers", label: "Ledgers" },
                         { id: "sync", label: "Sync" },

@@ -4,24 +4,15 @@ import { DataSource } from 'typeorm';
 
 @Injectable()
 export class SchemaSyncService {
-  private readonly logger = new Logger('SchemaSync');
+  private logger = new Logger('SchemaSync');
 
-  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
+  constructor(
+    @InjectDataSource()
+    private dataSource: DataSource,
+  ) {}
 
-  /**
-   * Entity-driven additive schema sync. Compares every registered entity
-   * against the live database and applies ONLY additive changes
-   * (CREATE TABLE / ADD COLUMN / CREATE INDEX) so no hardcoded column list
-   * needs maintaining — any new entity or column ships automatically on the
-   * next deploy. Non-additive changes (DROP/ALTER COLUMN) are logged and
-   * skipped to protect data in a DB shared with admin-customer.
-   *
-   * Call this from bootstrap() BEFORE app.listen() so the schema is
-   * guaranteed present before the app serves any request.
-   */
-  async syncSchema(): Promise<void> {
+  async syncSchema() {
     this.logger.log('Checking schema drift between entities and database...');
-
     try {
       const sqlInMemory = await this.dataSource.driver
         .createSchemaBuilder()
@@ -29,7 +20,7 @@ export class SchemaSyncService {
 
       const upQueries = sqlInMemory.upQueries.map((q) => q.query);
 
-      const additivePatterns: RegExp[] = [
+      const additivePatterns = [
         /^CREATE TABLE/i,
         /^ALTER TABLE\s+`?[^`\s]+`?\s+ADD\s/i,
         /^CREATE\s+(UNIQUE\s+)?INDEX/i,
@@ -38,7 +29,9 @@ export class SchemaSyncService {
       const additive = upQueries.filter((sql) =>
         additivePatterns.some((p) => p.test(sql)),
       );
-      const nonAdditive = upQueries.filter((sql) => !additive.includes(sql));
+      const nonAdditive = upQueries.filter(
+        (sql) => !additive.includes(sql),
+      );
 
       if (additive.length === 0) {
         this.logger.log('Schema is up-to-date, no additive changes needed.');
@@ -48,10 +41,8 @@ export class SchemaSyncService {
           try {
             await this.dataSource.query(sql);
             this.logger.log(`  applied: ${this.truncate(sql)}`);
-          } catch (err: any) {
-            this.logger.warn(
-              `  failed: ${err.message} | sql: ${this.truncate(sql)}`,
-            );
+          } catch (err) {
+            this.logger.warn(`  failed: ${err.message} | sql: ${this.truncate(sql)}`);
           }
         }
       }
@@ -64,7 +55,7 @@ export class SchemaSyncService {
           this.logger.warn(`  skipped: ${this.truncate(sql)}`);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       this.logger.error(`Schema drift check failed: ${err.message}`);
     }
   }

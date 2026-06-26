@@ -1,11 +1,4 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-  ManyToOne,
-  JoinColumn,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { User } from './user.entity';
 
 @Entity()
@@ -14,7 +7,7 @@ export class GodownEntry {
   id: number;
 
   @Column()
-  godown: string; // 'shop' or 'pan'
+  godown: string;
 
   @Column()
   quantity: number;
@@ -30,12 +23,11 @@ export class GodownEntry {
   user_id: number;
 
   @Column({ nullable: true })
-  user_name: string; // Persisted name for historical records
+  user_name: string;
 
-  // Relation Removed as per user request (Decoupled)
   @Column({ type: 'int', nullable: true })
   item_id: number;
 
   @Column()
-  item_name: string; // Storing name for easier display
+  item_name: string;
 }

@@ -47,6 +47,52 @@ export class AuthService {
     return null;
   }
 
+  /**
+   * Normalize the `simple-json` permissions value WITHOUT destroying its shape.
+   *
+   * The admin UI stores a structured object:
+   *   { system: string[], orderTypes, godowns, allowedParents, allowedCategories }
+   * where `system` is the list of page permissions. The backend PermissionsGuard
+   * and the frontend hasPermission() both read either a flat string[] OR
+   * `permissions.system`, so BOTH shapes are valid and must be preserved.
+   *
+   * This only:
+   *  - parses a JSON-encoded string into its real value,
+   *  - cleans a flat array to string[],
+   *  - normalizes a bare comma-separated string to string[],
+   *  - returns [] for genuinely empty/garbage scalars (number, null, etc.).
+   * A structured object is returned untouched (with `system` cleaned) so saved
+   * page permissions are never wiped.
+   */
+  static normalizePermissions(value: any): string[] | Record<string, any> {
+    if (Array.isArray(value)) {
+      return value.filter((p) => typeof p === 'string');
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        // Recurse so a JSON-encoded object keeps its structure.
+        return AuthService.normalizePermissions(parsed);
+      } catch {
+        // Not JSON — treat as a comma-separated list.
+      }
+      return trimmed
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean);
+    }
+    if (value && typeof value === 'object') {
+      // Structured permissions object — preserve it, just clean `system`.
+      const system = Array.isArray(value.system)
+        ? value.system.filter((p: any) => typeof p === 'string')
+        : [];
+      return { ...value, system };
+    }
+    return [];
+  }
+
   async login(user: any) {
     const payload = {
       username: user.username,
@@ -54,7 +100,10 @@ export class AuthService {
       id: user.id,
       role: user.role,
       name: user.name,
-      permissions: user.permissions || [],
+      // `permissions` is a `simple-json any` column, so a row may hold a
+      // non-array (object/string) and crash the frontend's
+      // `permissions.includes(...)`. Always hand back a real string[].
+      permissions: AuthService.normalizePermissions(user.permissions),
     };
     return {
       access_token: this.jwtService.sign(payload),

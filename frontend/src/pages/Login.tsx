@@ -26,8 +26,19 @@ export default function Login() {
             }
             localStorage.setItem('token', access_token);
 
-            // Redirect to the user's role-default page
-            window.location.href = getDefaultRoute(user);
+            // Redirect to the user's role-default page. If the account has no
+            // accessible page (e.g. an employee with no permissions assigned),
+            // getDefaultRoute returns '/login' — don't silently bounce back to
+            // the login form (which looks like the login failed). Show a clear
+            // message instead and clear the just-stored session.
+            const route = getDefaultRoute(user);
+            if (route === '/login') {
+                localStorage.removeItem('user');
+                localStorage.removeItem('token');
+                setError('Login succeeded, but your account has no access permissions. Please contact an administrator.');
+                return;
+            }
+            window.location.href = route;
         } catch (err: any) {
             console.error(err);
             setError('Invalid username or password');

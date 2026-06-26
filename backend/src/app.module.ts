@@ -21,6 +21,7 @@ import { TallyService } from './tally.service';
 import { AuthModule } from './auth/auth.module';
 import { ItemDetailsModule } from './item-details/item-details.module';
 import { SchemaSyncService } from './schema-sync.service';
+
 @Module({
   imports: [
     AuthModule,
@@ -37,15 +38,12 @@ import { SchemaSyncService } from './schema-sync.service';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         type: 'mysql',
-        host: configService.get<string>('DB_HOST', '127.0.0.1'),
-        port: configService.get<number>('DB_PORT', 3306),
-        username: configService.get<string>('DB_USERNAME', 'root'),
-        password: configService.get<string>('DB_PASSWORD', ''),
-        database: configService.get<string>('DB_NAME', 'ppw_db'),
+        host: configService.get('DB_HOST', '127.0.0.1'),
+        port: configService.get('DB_PORT', 3306),
+        username: configService.get('DB_USERNAME', 'root'),
+        password: configService.get('DB_PASSWORD', ''),
+        database: configService.get('DB_NAME', 'ppw_db'),
         entities: [Ledger, StockItem, Order, OrderDetail, User, GodownEntry, Meta, ItemDetail, ItemMedia],
-        // synchronize is OFF in code path — SchemaSyncService is the sole schema authority
-        // and applies ONLY additive changes (CREATE TABLE / ADD COLUMN / CREATE INDEX),
-        // protecting any DB shared with admin-customer from destructive ALTERs.
         synchronize: false,
       }),
       inject: [ConfigService],

@@ -7,7 +7,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "postinstall": "test -f dist/src/main.js || npm run build",
+    "postinstall": "echo 'postinstall skipped — dist is pre-built in deploy bundle'",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

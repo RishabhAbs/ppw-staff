@@ -1,5 +1,5 @@
-import { Controller, Get, Param, Req, Res } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import { Controller, Get, Param, Res, Req } from '@nestjs/common';
+import { Response, Request } from 'express';
 import { ItemDetailsService } from './item-details.service';
 
 const SAFE_NAME = /^[\w.\-]+$/;
@@ -9,10 +9,7 @@ export class MediaController {
   constructor(private readonly service: ItemDetailsService) {}
 
   @Get('videos/:filename')
-  async streamVideo(
-    @Param('filename') filename: string,
-    @Res() res: Response,
-  ) {
+  async streamVideo(@Param('filename') filename: string, @Res() res: Response) {
     if (!SAFE_NAME.test(filename)) {
       res.status(400).send('Invalid filename');
       return;
@@ -20,7 +17,7 @@ export class MediaController {
     return this.service.streamMedia(
       `uploads/items/videos/${filename}`,
       res,
-      filename.endsWith('.mp4') ? 'video/mp4' : 'video/webm',
+      filename.endsWith('.mp4') ? 'video/mp4' : 'video/webm'
     );
   }
 
@@ -28,7 +25,7 @@ export class MediaController {
   async streamImage(
     @Param('filename') filename: string,
     @Res() res: Response,
-    @Req() req: Request,
+    @Req() req: Request
   ) {
     if (!SAFE_NAME.test(filename)) {
       res.status(400).send('Invalid filename');
@@ -39,15 +36,10 @@ export class MediaController {
       ext === 'png'
         ? 'image/png'
         : ext === 'jpg' || ext === 'jpeg'
-          ? 'image/jpeg'
-          : ext === 'gif'
-            ? 'image/gif'
-            : 'image/webp';
-    return this.service.streamMedia(
-      `uploads/items/${filename}`,
-      res,
-      contentType,
-      req,
-    );
+        ? 'image/jpeg'
+        : ext === 'gif'
+        ? 'image/gif'
+        : 'image/webp';
+    return this.service.streamMedia(`uploads/items/${filename}`, res, contentType, req);
   }
 }

@@ -1,0 +1,16 @@
+# Local override: reuse the existing "ppw" stack's MySQL (container ppw-mysql-1,
+# reachable as "mysql" on network ppw_default) instead of starting a new DB.
+# Run only backend + frontend:  docker compose up -d backend frontend
+services:
+  backend:
+    depends_on: []          # old mysql is managed by the other compose project
+    networks:
+      - default             # to reach frontend
+      - ppw_default         # to reach existing mysql
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+
+networks:
+  ppw_default:
+    external: true

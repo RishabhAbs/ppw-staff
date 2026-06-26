@@ -17,15 +17,12 @@ export class PermissionsGuard implements CanActivate {
     }
 
     const { user } = context.switchToHttp().getRequest();
-
     if (!user) return false;
 
-    // Admins have all permissions automatically
     if (user.role === 'admin') {
       return true;
     }
 
-    // Support both old format (array of strings) and new format (object with system key)
     let explicitPerms: string[] = [];
     if (Array.isArray(user.permissions)) {
       explicitPerms = user.permissions;

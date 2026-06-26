@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Loader, Search, FileText, Calendar, ArrowRight, Trash2, LogOut, X, User as UserIcon, ChevronDown } from 'lucide-react';
 import { getOrders, deleteOrder, syncOrderToTally, getUser } from '../api';
+import { hasPermission } from '../utils';
 
 // Define interfaces locally if not exported from api
 const copper = '#b8804a';
@@ -160,7 +161,9 @@ export default function OrderReport() {
     };
 
     const user = getUser();
-    const isManager = user?.role === 'manager' || user?.permissions?.includes('inventory') || user?.permissions?.includes('reports');
+    // Use hasPermission (handles both array and { system: [...] } shapes) so a
+    // structured permissions object never crashes via a raw .includes() call.
+    const isManager = user?.role === 'manager' || hasPermission(user, 'inventory') || hasPermission(user, 'reports');
     const hasFilterAccess = isAdmin || isManager;
 
     const getHeaderText = () => {
