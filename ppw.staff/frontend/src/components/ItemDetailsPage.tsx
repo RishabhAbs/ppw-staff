@@ -261,9 +261,27 @@ export default function ItemDetailsPage({ onClose }: Props) {
                 setSaveSuccess(true);
                 setTimeout(() => setSaveSuccess(false), 2500);
             }
-        } catch (e) {
-            console.error(e);
-            alert('Failed to save. Please try again.');
+        } catch (e: any) {
+            // Detailed failure logging so the exact point of error is visible in
+            // the browser console (DevTools) even when the UI shows a short alert.
+            const status = e?.response?.status;
+            const serverMsg = e?.response?.data?.message || e?.response?.data;
+            console.error('[ItemDetails] SAVE FAILED', {
+                masterid: selectedItem.masterid,
+                status,
+                statusText: e?.response?.statusText,
+                serverMessage: serverMsg,
+                axiosMessage: e?.message,
+                url: e?.config?.url,
+                method: e?.config?.method,
+                error: e,
+            });
+            let msg = 'Failed to save. Please try again.';
+            if (status === 413) msg = 'Upload too large — the server rejected it (HTTP 413).';
+            else if (status === 401 || status === 403) msg = `Not allowed to save (HTTP ${status}). Please re-login.`;
+            else if (status >= 500) msg = `Server error (HTTP ${status}). Please try again.`;
+            else if (!status) msg = 'Network error — could not reach the server.';
+            alert(`${msg}${status ? `\n[code ${status}]` : ''}`);
         } finally {
             setSaving(false);
         }

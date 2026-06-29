@@ -32,6 +32,12 @@ ppw_deploy*.txt
 *.sql
 backup_db_*.sql
 prod_fresh*.sql
+backups/
+**/backups/
+
+# ---- Runtime-uploaded media (served from S3 in prod, not source) ----
+backend/public/uploads/items/
+**/public/uploads/items/
 
 # ---- Mobile / Android build ----
 *.apk
