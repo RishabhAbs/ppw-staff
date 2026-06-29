@@ -1,6 +1,6 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { jwtConstants } from './constants';
@@ -20,12 +20,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    // Fetch fresh permissions from DB so admin changes take effect immediately
-    // (mirrors admin-customer's strategy). The PermissionsGuard reads
-    // req.user.permissions, so it MUST be populated here.
     const user = await this.userRepository.findOne({
       where: { id: payload.id || payload.sub },
     });
+    if (!user || !user.is_active) {
+      throw new UnauthorizedException('Account is deactivated');
+    }
+    if ((payload.token_version ?? 0) !== user.token_version) {
+      throw new UnauthorizedException('Session expired');
+    }
     return {
       id: payload.id || payload.sub,
       userId: payload.sub,

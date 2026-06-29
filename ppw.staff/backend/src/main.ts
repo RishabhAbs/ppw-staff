@@ -35,10 +35,12 @@ async function bootstrap() {
       credentials: true,
     });
 
-    // Serve frontend static files (JS, CSS, images) with correct MIME types
+    // Serve frontend static files (JS, CSS, images) with correct MIME types.
+    // Register on the raw Express instance so the NestJS global prefix ('api')
+    // does not scope this middleware — static assets live at the root (e.g. /ppw-logo.png).
     const clientDir = join(process.cwd(), 'client');
     if (existsSync(clientDir)) {
-      app.use(express.static(clientDir));
+      expressInstance.use(express.static(clientDir));
     }
 
     // SPA fallback: catches 404s for non-API routes and serves index.html

@@ -20,6 +20,10 @@ export class AuthService {
       .where('LOWER(user.username) = LOWER(:username)', { username })
       .getOne();
     if (user) {
+      if (!user.is_active) {
+        throw new UnauthorizedException('Account is deactivated. Contact admin.');
+      }
+
       // 1. Try bcrypt compare (for migrated users)
       const isMatch = await bcrypt.compare(pass, user.password);
       if (isMatch) {
@@ -51,6 +55,7 @@ export class AuthService {
       role: user.role,
       name: user.name,
       permissions: user.permissions ?? null,
+      token_version: user.token_version ?? 0,
     };
     return {
       access_token: this.jwtService.sign(payload),

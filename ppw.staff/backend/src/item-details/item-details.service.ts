@@ -44,8 +44,8 @@ export class ItemDetailsService {
     this.region = process.env.AWS_REGION || 'ap-south-1';
     this.bucket = process.env.S3_BUCKET_NAME || '';
     if (!this.bucket) {
-      this.logger.error(
-        'S3_BUCKET_NAME is not set — uploads will fail. Set the env var on Elastic Beanstalk.',
+      this.logger.warn(
+        'S3_BUCKET_NAME is not set — using local file storage instead of S3.',
       );
     }
     this.s3 = new S3Client({ region: this.region });
@@ -186,9 +186,13 @@ export class ItemDetailsService {
   private buildWatermarkSvg(width: number, height: number): Buffer {
     const line1 = this.escapeXml(ItemDetailsService.WATERMARK_LINE1);
     const line2 = this.escapeXml(ItemDetailsService.WATERMARK_LINE2);
-    const stepX = Math.max(140, Math.round(width / 3));
-    const stepY = Math.max(90, Math.round(height / 4));
     const fontSize = Math.max(11, Math.round(width / 38));
+    const textWidth = fontSize * 16;
+    const angle = Math.PI / 6;
+    const minStepX = Math.round(textWidth * Math.cos(angle)) + 40;
+    const minStepY = Math.round(textWidth * Math.sin(angle)) + 40;
+    const stepX = Math.max(minStepX, Math.round(width / 2.5));
+    const stepY = Math.max(minStepY, Math.round(height / 3));
     const tiles: string[] = [];
     for (let y = -stepY; y < height + stepY; y += stepY) {
       for (let x = -stepX; x < width + stepX; x += stepX) {
@@ -237,12 +241,17 @@ export class ItemDetailsService {
   }
 
   private async deleteFromS3(urlName: string, slot: string): Promise<void> {
-    try {
-      await this.s3.send(new DeleteObjectCommand({
-        Bucket: this.bucket,
-        Key: this.s3Key(urlName, slot),
-      }));
-    } catch { /* ignore missing */ }
+    const key = this.s3Key(urlName, slot);
+    if (this.bucket) {
+      try {
+        await this.s3.send(new DeleteObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+        }));
+      } catch { /* ignore missing */ }
+    }
+    const localPath = path.join(this.localMediaRoot, key);
+    try { if (fs.existsSync(localPath)) fs.unlinkSync(localPath); } catch { /* ignore */ }
   }
 
   async saveDetails(
@@ -298,51 +307,51 @@ export class ItemDetailsService {
       const key = this.s3Key(urlName, slot);
 
       if (slot.startsWith('vid')) {
-        // Unique names so concurrent uploads can never collide (two Date.now()
-        // calls in the same millisecond previously could clobber each other).
         const id = randomUUID();
         const tempIn = path.join(this.tmpDir, `in_${id}.webm`);
         const tempOut = path.join(this.tmpDir, `out_${id}.webm`);
         try {
           fs.writeFileSync(tempIn, file.buffer);
           await this.compressVideo(tempIn, tempOut);
-          // Stream the compressed file straight to S3 instead of reading it back
-          // into a Buffer — avoids the extra memory that triggered OOM kills
-          // (which skipped cleanup and left scratch files filling the disk).
           const { size } = fs.statSync(tempOut);
-          await this.s3.send(new PutObjectCommand({
-            Bucket: this.bucket,
-            Key: key,
-            Body: fs.createReadStream(tempOut),
-            ContentLength: size,
-            ContentType: 'video/webm',
-          })).catch((err) => {
-            console.error(`S3 video upload failed for key=${key}:`, err?.message || err);
-            throw err;
-          });
+          if (this.bucket) {
+            await this.s3.send(new PutObjectCommand({
+              Bucket: this.bucket,
+              Key: key,
+              Body: fs.createReadStream(tempOut),
+              ContentLength: size,
+              ContentType: 'video/webm',
+            })).catch((err) => {
+              console.error(`S3 video upload failed for key=${key}:`, err?.message || err);
+              throw err;
+            });
+          } else {
+            const localDir = path.join(this.localMediaRoot, 'uploads/items/videos');
+            if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+            fs.copyFileSync(tempOut, path.join(this.localMediaRoot, key));
+          }
         } finally {
-          // Always remove scratch files, even on error. The boot sweep + hourly
-          // cron above are the backstop for hard kills where this can't run.
           try { if (fs.existsSync(tempIn)) fs.unlinkSync(tempIn); } catch { /* ignore */ }
           try { if (fs.existsSync(tempOut)) fs.unlinkSync(tempOut); } catch { /* ignore */ }
         }
       } else {
-        // Watermark + compress in one pass, then tag the object watermarked=1.
-        // The tag is the idempotency contract: this image is now stamped, so the
-        // backfill script (and any future reprocessing) skips it — no double
-        // watermark on re-edit. A fresh upload always gets a NEW unique key from
-        // the user's raw file, so the first stamp is always applied exactly once.
         const stamped = await this.compressAndWatermark(file.buffer);
-        await this.s3.send(new PutObjectCommand({
-          Bucket: this.bucket,
-          Key: key,
-          Body: stamped,
-          ContentType: 'image/webp',
-          Metadata: { watermarked: '1' },
-        })).catch((err) => {
-          console.error(`S3 image upload failed for key=${key}:`, err?.message || err);
-          throw err;
-        });
+        if (this.bucket) {
+          await this.s3.send(new PutObjectCommand({
+            Bucket: this.bucket,
+            Key: key,
+            Body: stamped,
+            ContentType: 'image/webp',
+            Metadata: { watermarked: '1' },
+          })).catch((err) => {
+            console.error(`S3 image upload failed for key=${key}:`, err?.message || err);
+            throw err;
+          });
+        } else {
+          const localDir = path.join(this.localMediaRoot, 'uploads/items');
+          if (!fs.existsSync(localDir)) fs.mkdirSync(localDir, { recursive: true });
+          fs.writeFileSync(path.join(this.localMediaRoot, key), stamped);
+        }
       }
 
       const type = slot.startsWith('vid') ? 'video' : 'image';

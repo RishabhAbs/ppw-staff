@@ -209,6 +209,16 @@ export const deleteUser = async (id: number) => {
     return response.data;
 };
 
+export const toggleUserActive = async (id: number) => {
+    const response = await api.patch(`/users/${id}/toggle-active`);
+    return response.data;
+};
+
+export const forceLogoutUser = async (id: number) => {
+    const response = await api.patch(`/users/${id}/force-logout`);
+    return response.data;
+};
+
 // Godown
 export const createGodownEntry = async (entryData: any) => {
     const response = await api.post('/godown/entries', entryData);

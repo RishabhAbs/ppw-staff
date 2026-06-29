@@ -4,6 +4,8 @@ import {
   createUser,
   deleteUser,
   updateUser,
+  toggleUserActive,
+  forceLogoutUser,
   getStockParents,
   getStockCategories,
 } from "../api";
@@ -17,6 +19,9 @@ import {
   ShieldCheck,
   Tag,
   Box,
+  LogOut,
+  UserX,
+  UserCheck,
 } from "lucide-react";
 
 export default function AdminProfile() {
@@ -137,6 +142,27 @@ export default function AdminProfile() {
     setShowAddModal(true);
   };
 
+  const handleToggleActive = async (user: any) => {
+    const action = user.is_active ? "deactivate" : "activate";
+    if (!confirm(`Are you sure you want to ${action} ${user.name || user.username}?`)) return;
+    try {
+      await toggleUserActive(user.id);
+      fetchUsers();
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleForceLogout = async (user: any) => {
+    if (!confirm(`Force logout ${user.name || user.username}? Their current session will be invalidated.`)) return;
+    try {
+      await forceLogoutUser(user.id);
+      alert(`${user.name || user.username} has been logged out.`);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleDeleteUser = async (id: number) => {
     if (!confirm("Are you sure?")) return;
     try {
@@ -177,37 +203,59 @@ export default function AdminProfile() {
           {users.map((user) => (
             <div
               key={user.id}
-              className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between"
+              className={`p-4 rounded-2xl border shadow-sm flex items-center justify-between ${user.is_active === false ? "bg-red-50/50 border-red-100" : "bg-white border-slate-100"}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 font-bold text-lg uppercase">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg uppercase ${user.is_active === false ? "bg-red-100 text-red-400" : "bg-slate-100 text-slate-500"}`}>
                   {user.username.charAt(0)}
                 </div>
                 <div>
-                  <p className="font-bold text-slate-800">
-                    {user.name || user.username}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className={`font-bold ${user.is_active === false ? "text-slate-400 line-through" : "text-slate-800"}`}>
+                      {user.name || user.username}
+                    </p>
+                    {user.is_active === false && (
+                      <span className="text-[9px] font-black text-red-500 bg-red-100 px-1.5 py-0.5 rounded-full uppercase">Inactive</span>
+                    )}
+                  </div>
                   <p className="text-xs text-slate-500 capitalize flex items-center gap-1">
                     {user.role} <span className="text-slate-300">•</span>{" "}
                     {user.number || "No Phone"}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => handleEditClick(user)}
                   className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                  title="Edit"
                 >
                   <Edit2 size={18} />
                 </button>
                 {user.username !== "admin" && (
-                  <button
-                    onClick={() => handleDeleteUser(user.id)}
-                    className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete User"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleToggleActive(user)}
+                      className={`p-2 rounded-lg transition-colors ${user.is_active === false ? "text-emerald-400 hover:text-emerald-600 hover:bg-emerald-50" : "text-slate-400 hover:text-orange-600 hover:bg-orange-50"}`}
+                      title={user.is_active === false ? "Activate User" : "Deactivate User"}
+                    >
+                      {user.is_active === false ? <UserCheck size={18} /> : <UserX size={18} />}
+                    </button>
+                    <button
+                      onClick={() => handleForceLogout(user)}
+                      className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                      title="Force Logout"
+                    >
+                      <LogOut size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Delete User"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </>
                 )}
               </div>
             </div>

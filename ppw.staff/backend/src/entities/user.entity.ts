@@ -24,4 +24,10 @@ export class User {
 
   @Column({ type: 'simple-json', nullable: true })
   permissions: any;
+
+  @Column({ default: true })
+  is_active: boolean;
+
+  @Column({ default: 0 })
+  token_version: number;
 }

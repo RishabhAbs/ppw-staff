@@ -52,6 +52,28 @@ export class UserController {
   }
 
   @RequirePermission('staff')
+  @Patch(':id/toggle-active')
+  async toggleActive(@Param('id') id: string) {
+    const user = await this.usersRepository.findOneBy({ id: parseInt(id) });
+    if (!user) throw new Error('User not found');
+    if (user.username === 'admin') throw new Error('Cannot deactivate the main Admin');
+    user.is_active = !user.is_active;
+    if (!user.is_active) user.token_version += 1;
+    await this.usersRepository.save(user);
+    return { is_active: user.is_active };
+  }
+
+  @RequirePermission('staff')
+  @Patch(':id/force-logout')
+  async forceLogout(@Param('id') id: string) {
+    const user = await this.usersRepository.findOneBy({ id: parseInt(id) });
+    if (!user) throw new Error('User not found');
+    user.token_version += 1;
+    await this.usersRepository.save(user);
+    return { success: true };
+  }
+
+  @RequirePermission('staff')
   @Delete(':id')
   async remove(@Param('id') id: string) {
     const userToDelete = await this.usersRepository.findOneBy({
